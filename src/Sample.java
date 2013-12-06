@@ -152,6 +152,46 @@ class Sample {
         // Remove the sample listener when done
         controller.removeListener(sampler);
         
-        System.out.println(Math.abs(control.fingers().count() - test.fingers().count()));
+        Matrix controlTransform = handTransform(control);
+        Matrix testTransform = handTransform(test);
+        Vector[] controlPoints = new Vector[control.fingers().count()];
+        Vector[] controlDirections = new Vector[control.fingers().count()];
+        Vector[] testPoints = new Vector[test.fingers().count()];
+        Vector[] testDirections= new Vector[test.fingers().count()];
+
+        for( int i = 0; i < control.fingers().count(); i++)
+        {
+            Finger controlFinger = control.fingers().get(i);
+            controlPoints[i] = controlTransform.transformPoint(controlFinger.tipPosition());
+            controlDirections[i] = controlTransform.transformDirection(controlFinger.direction());
+        }
+        
+        for( int i = 0; i < test.fingers().count(); i++)
+        {
+            Finger testFinger = test.fingers().get(i);
+            testPoints[i] = testTransform.transformPoint(testFinger.tipPosition());
+            testDirections[i] = testTransform.transformDirection(testFinger.direction());
+        }
+        
+        int min = Math.min(control.fingers().count(), test.fingers().count());
+        float pointscore = 0, dirscore = 0;
+        
+        for(int i = 0; i < min; i++) {
+        	pointscore += testPoints[i].distanceTo(controlPoints[i]);
+        	dirscore += testDirections[i].angleTo(controlDirections[i]);
+        }
+        
+        System.out.print(pointscore + " " + dirscore);
+    }
+    
+    private static Matrix handTransform(Hand leapHand) {
+    	Vector handXBasis =  leapHand.palmNormal().cross(leapHand.direction()).normalized();
+        Vector handYBasis = leapHand.palmNormal().opposite();
+        Vector handZBasis = leapHand.direction().opposite();
+        Vector handOrigin =  leapHand.palmPosition();
+        Matrix handTransform = new Matrix(handXBasis, handYBasis, handZBasis, handOrigin);
+        handTransform = handTransform.rigidInverse();
+        
+        return handTransform;
     }
 }
