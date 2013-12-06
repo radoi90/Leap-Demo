@@ -11,8 +11,18 @@ import java.math.BigDecimal;
 
 import com.leapmotion.leap.*;
 
-class SampleListener extends Listener {
-	private static boolean moving = false;
+class HandSampler extends Listener {
+	private boolean moving = false;
+	private boolean viable = false;
+	private Hand currSample;
+	private static final int HISTORY = 10;
+	private static final float MOVING_VELOCITY = 25;
+	private static final float MOVING_TURN = 0.3f;
+	
+	public Hand getSample() {
+		if (!viable) return null;
+		else return currSample;
+	}
 	
     public void onInit(Controller controller) {
         System.out.println("Initialized");
@@ -36,21 +46,25 @@ class SampleListener extends Listener {
         Frame frame = controller.frame();
 
         if (!frame.hands().isEmpty()) {
-        	float av = avgVelocity(controller, 10);
-        	float at = avgTurn(controller, 10);
-        	//System.out.println(av + " " + at);
+        	boolean newMoving = isMoving(controller);
             
-        	boolean newMoving = (av > 9 || at > 1.8);
-            
-        	if(moving != newMoving) {
+        	if (moving != newMoving) {
             	moving = newMoving;
-            	System.out.println(moving);
             }
+        	
+        	if (moving) {
+        		viable = false;
+        	} else {
+        		viable = true;
+        		currSample = frame.hands().get(0);
+        	}
+        } else {
+        	viable = false;
         }
     }
     
     private float avgVelocity(Controller controller, int n) {
-    	float avgV = 0;
+    	Vector sum = Vector.zero();
     	
     	for(int i = 0; i < n; i++) {
     		Frame frame = controller.frame(i);
@@ -58,16 +72,16 @@ class SampleListener extends Listener {
     		if (frame.isValid() && !frame.hands().isEmpty()) {
                 // Get the first hand
                 Hand hand = frame.hands().get(0);
-                avgV += hand.palmVelocity().magnitude();
+                sum = sum.plus(hand.palmVelocity());
     		}
     	}
     	
-    	avgV /= n;
-    	return avgV;
+    	sum = sum.divide(n);
+    	return sum.magnitude();
     }
     
     private float avgTurn(Controller controller, int n) {
-    	float sum = 0;
+    	Vector sum = Vector.zero();
 
     	for(int i = 0; i < n; i++) {
     		Frame frame = controller.frame(i);
@@ -76,12 +90,16 @@ class SampleListener extends Listener {
                 // Get the first hand
                 Hand hand = frame.hands().get(0);
                 
-                sum += hand.translation(controller.frame(i-1)).magnitude();
+                sum = sum.plus(hand.translation(controller.frame(i-1)));
     		}
     	}
     	
-    	sum /= n;
-    	return sum;
+    	sum = sum.divide(n);
+    	return sum.magnitude();
+    }
+    
+    private boolean isMoving(Controller controller) {
+    	return (avgVelocity(controller, HISTORY) > MOVING_VELOCITY || avgTurn(controller, HISTORY) > MOVING_TURN);
     }
     
     public static float round(float d, int decimalPlace) {
@@ -94,21 +112,46 @@ class SampleListener extends Listener {
 class Sample {
     public static void main(String[] args) {
         // Create a sample listener and controller
-        SampleListener listener = new SampleListener();
+        HandSampler sampler = new HandSampler();
         Controller controller = new Controller();
 
         // Have the sample listener receive events from the controller
-        controller.addListener(listener);
-
-        // Keep this process running until Enter is pressed
-        System.out.println("Press Enter to quit...");
-        try {
-            System.in.read();
-        } catch (IOException e) {
-            e.printStackTrace();
+        controller.addListener(sampler);
+        
+        Hand control, test;
+        
+        // Keep this process running until there is a sample and Enter is pressed 
+        while(true) {
+        	System.out.println("Keep hand still and press Enter to record control hand gesture...");
+	        try {
+	            System.in.read();
+	        } catch (IOException e) {
+	            e.printStackTrace();
+	        }
+	        control = sampler.getSample();
+	        if (control != null) break;
         }
 
         // Remove the sample listener when done
-        controller.removeListener(listener);
+        controller.removeListener(sampler);
+        
+        controller.addListener(sampler);
+        
+        // Keep this process running until there is a sample and Enter is pressed 
+        while(true) {
+        	System.out.println("Keep hand still and press Enter to record test hand gesture...");
+	        try {
+	            System.in.read();
+	        } catch (IOException e) {
+	            e.printStackTrace();
+	        }
+	        test = sampler.getSample();
+	        if (test != null) break;
+        }
+     
+        // Remove the sample listener when done
+        controller.removeListener(sampler);
+        
+        System.out.println(Math.abs(control.fingers().count() - test.fingers().count()));
     }
 }
