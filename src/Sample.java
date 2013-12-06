@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 import com.leapmotion.leap.*;
 
 class SampleListener extends Listener {
+	private static boolean moving = false;
+	
     public void onInit(Controller controller) {
         System.out.println("Initialized");
     }
@@ -34,20 +36,52 @@ class SampleListener extends Listener {
         Frame frame = controller.frame();
 
         if (!frame.hands().isEmpty()) {
-            // Get the first hand
-            Hand hand = frame.hands().get(0);
-
-            // Check if the hand has any fingers
-            FingerList fingers = hand.fingers();
-            if (fingers.count() > 1) {
-                // Calculate the hand's average finger tip position
-            	Vector leftTip = fingers.leftmost().tipPosition();
-                Vector rightTip = fingers.rightmost().tipPosition();
-
-                System.out.println(round(leftTip.distanceTo(rightTip), 0));
+        	float av = avgVelocity(controller, 10);
+        	float at = avgTurn(controller, 10);
+        	//System.out.println(av + " " + at);
+            
+        	boolean newMoving = (av > 9 || at > 1.8);
+            
+        	if(moving != newMoving) {
+            	moving = newMoving;
+            	System.out.println(moving);
             }
-
         }
+    }
+    
+    private float avgVelocity(Controller controller, int n) {
+    	float avgV = 0;
+    	
+    	for(int i = 0; i < n; i++) {
+    		Frame frame = controller.frame(i);
+    		
+    		if (frame.isValid() && !frame.hands().isEmpty()) {
+                // Get the first hand
+                Hand hand = frame.hands().get(0);
+                avgV += hand.palmVelocity().magnitude();
+    		}
+    	}
+    	
+    	avgV /= n;
+    	return avgV;
+    }
+    
+    private float avgTurn(Controller controller, int n) {
+    	float sum = 0;
+
+    	for(int i = 0; i < n; i++) {
+    		Frame frame = controller.frame(i);
+    		
+    		if (frame.isValid() && !frame.hands().isEmpty()) {
+                // Get the first hand
+                Hand hand = frame.hands().get(0);
+                
+                sum += hand.translation(controller.frame(i-1)).magnitude();
+    		}
+    	}
+    	
+    	sum /= n;
+    	return sum;
     }
     
     public static float round(float d, int decimalPlace) {
